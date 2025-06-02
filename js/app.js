@@ -38,49 +38,41 @@ function setupNavigation() {
 // Weather widget initialization
 async function initializeWeatherWidget() {
     const weatherWidget = document.querySelector('.weather-widget');
-    const API_KEY = config.OPENWEATHER_API_KEY;
     
     try {
-        // Get user's location
-        const position = await getCurrentPosition();
-        const { latitude, longitude } = position.coords;
+        weatherWidget.innerHTML = '<div class="loading">Loading weather data...</div>';
         
-        // Fetch weather and beach data
-        const [weatherData, beachData] = await Promise.all([
-            fetchWeatherData(latitude, longitude, API_KEY),
-            fetchBeachConditions(latitude, longitude)
-        ]);
-        
-        // Update weather widget
+        // Get 4-day forecast
+        const forecast = await fetchNEAForecast();
+
+        // Create HTML for the weather widget
         weatherWidget.innerHTML = `
-            <div class="weather-content">
-                <div class="weather-main">
-                    <img src="https://openweathermap.org/img/w/${weatherData.weather[0].icon}.png" alt="Weather icon">
-                    <h3>${Math.round(weatherData.main.temp)}°C</h3>
-                    <p>${weatherData.weather[0].description}</p>
-                </div>
-                <div class="weather-details">
-                    <p><i class="fas fa-wind"></i> Wind: ${Math.round(weatherData.wind.speed * 3.6)} km/h</p>
-                    <p><i class="fas fa-water"></i> Humidity: ${weatherData.main.humidity}%</p>
-                    <p><i class="fas fa-sun"></i> UV Index: Loading...</p>
-                </div>
-                <div class="beach-conditions">
-                    <p><i class="fas fa-wave-square"></i> Wave Height: ${beachData.waveHeight} m</p>
-                    <p><i class="fas fa-water"></i> Water Temp: ${beachData.waterTemp}°C</p>
-                    <p><i class="fas fa-clock"></i> ${beachData.tideStatus}</p>
-                </div>
+            <h2>Beach Weather</h2>
+            <div class="forecast-grid">
+                ${forecast.map(day => `
+                    <div class="forecast-card">
+                        <h3>${day.date}</h3>
+                        <p>${day.forecast}</p>
+                        <div class="temp-range">
+                            <p>High: ${day.temperature.high}°C</p>
+                            <p>Low: ${day.temperature.low}°C</p>
+                        </div>
+                        <div class="conditions">
+                            <p>Humidity: ${day.humidity || '55% - 95%'}</p>
+                            <p>Wind: ${day.wind.speed.low}-${day.wind.speed.high} km/h (${day.wind.direction})</p>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
         `;
         
-        // Fetch UV Index separately (requires separate API call)
-        fetchUVIndex(latitude, longitude, API_KEY);
-        
     } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching weather data:', error);
         weatherWidget.innerHTML = `
             <div class="weather-error">
                 <i class="fas fa-exclamation-circle"></i>
                 <p>Weather data temporarily unavailable</p>
+                <p class="error-details">${error.message}</p>
                 <button onclick="initializeWeatherWidget()" class="retry-button">
                     <i class="fas fa-redo"></i> Retry
                 </button>
@@ -90,12 +82,66 @@ async function initializeWeatherWidget() {
 }
 
 // Fetch weather data
-async function fetchWeatherData(lat, lon, apiKey) {
+async function fetchWeatherData(lat, lon) {
     const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${config.OPENWEATHER_API_KEY}`
     );
     if (!response.ok) throw new Error('Weather data fetch failed');
     return response.json();
+}
+
+// Fetch NEA forecast data
+async function fetchNEAForecast() {
+    // Simulated 4-day forecast data
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 4; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        dates.push(date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+    }
+
+    const forecasts = [
+        {
+            date: dates[0],
+            forecast: "Partly Cloudy",
+            temperature: { high: 32, low: 26 },
+            humidity: "55% - 95%",
+            wind: { speed: { low: 10, high: 20 }, direction: "SSW" }
+        },
+        {
+            date: dates[1],
+            forecast: "Afternoon Thunderstorms",
+            temperature: { high: 31, low: 25 },
+            humidity: "60% - 95%",
+            wind: { speed: { low: 15, high: 25 }, direction: "S" }
+        },
+        {
+            date: dates[2],
+            forecast: "Mostly Sunny",
+            temperature: { high: 33, low: 26 },
+            humidity: "50% - 90%",
+            wind: { speed: { low: 8, high: 18 }, direction: "SSW" }
+        },
+        {
+            date: dates[3],
+            forecast: "Light Rain",
+            temperature: { high: 30, low: 24 },
+            humidity: "65% - 95%",
+            wind: { speed: { low: 12, high: 22 }, direction: "S" }
+        }
+    ];
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Simulate occasional errors (1 in 10 chance)
+    if (Math.random() < 0.1) {
+        throw new Error("Unable to fetch weather data. Please try again.");
+    }
+    
+    return forecasts;
 }
 
 // Fetch beach conditions
@@ -150,10 +196,10 @@ function getCurrentPosition() {
 }
 
 // Fetch UV Index data
-async function fetchUVIndex(lat, lon, apiKey) {
+async function fetchUVIndex(lat, lon) {
     try {
         const response = await fetch(
-            `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${apiKey}`
+            `https://api.openweathermap.org/data/2.5/uvi?lat=${lat}&lon=${lon}&appid=${config.OPENWEATHER_API_KEY}`
         );
         const data = await response.json();
         
@@ -268,4 +314,45 @@ function initializeMobileMenu() {
             ? '<i class="fas fa-times"></i>' 
             : '<i class="fas fa-bars"></i>';
     });
+}
+
+// Generate forecast HTML
+function generateForecastHTML(forecasts) {
+    if (!Array.isArray(forecasts) || forecasts.length === 0) {
+        console.error('Invalid forecasts data:', forecasts);
+        return '<div class="forecast-error">No forecast data available</div>';
+    }
+
+    return forecasts.map(day => {
+        try {
+            const date = new Date(day.date);
+            const formattedDate = date.toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
+            const weatherIcon = getWeatherIcon(day.forecast.toLowerCase());
+            
+            return `
+                <div class="forecast-day">
+                    <h4>${formattedDate}</h4>
+                    <i class="${weatherIcon}"></i>
+                    <p class="forecast-desc">${day.forecast}</p>
+                    <p class="temp-range">Temperature: ${day.temperature.low}°C - ${day.temperature.high}°C</p>
+                    <p class="humidity">Wind Direction: ${day.wind.direction}</p>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error generating forecast HTML for day:', day, error);
+            return '<div class="forecast-error">Error displaying forecast</div>';
+        }
+    }).join('');
+}
+
+// Helper function to get weather icons
+function getWeatherIcon(forecast) {
+    if (forecast.includes('thundery')) return 'fas fa-bolt';
+    if (forecast.includes('rain')) return 'fas fa-cloud-rain';
+    if (forecast.includes('showers')) return 'fas fa-cloud-rain';
+    if (forecast.includes('cloudy')) return 'fas fa-cloud';
+    if (forecast.includes('fair')) return 'fas fa-sun';
+    if (forecast.includes('sunny')) return 'fas fa-sun';
+    if (forecast.includes('windy')) return 'fas fa-wind';
+    return 'fas fa-cloud'; // default icon
 }
